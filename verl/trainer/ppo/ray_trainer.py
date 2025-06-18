@@ -547,8 +547,10 @@ class RayPPOTrainer:
 
             # Store original inputs
             input_ids = test_batch.batch["input_ids"]
+            index = test_batch.non_tensor_batch['index']
             # TODO: Can we keep special tokens except for padding tokens?
-            input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+            # Add index to prevent same prompt id but different qns being merged in the val logging
+            input_texts = ["Index : " + str(ind) + " " + self.tokenizer.decode(ids, skip_special_tokens=True) for ids, ind in zip(input_ids, index)]
             sample_inputs.extend(input_texts)
             sample_uids.extend(test_batch.non_tensor_batch["uid"])
 

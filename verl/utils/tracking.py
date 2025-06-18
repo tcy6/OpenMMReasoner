@@ -21,7 +21,7 @@ import os
 from enum import Enum
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Union
 
 
 class Tracking:
@@ -47,26 +47,45 @@ class Tracking:
         "file",
     ]
 
-    def __init__(self, project_name, experiment_name, default_backend: str | list[str] = "console", config=None):
+    def __init__(
+        self,
+        project_name,
+        experiment_name,
+        default_backend: Union[str, List[str]] = "console",
+        config=None,
+    ):
         if isinstance(default_backend, str):
             default_backend = [default_backend]
         for backend in default_backend:
             if backend == "tracking":
                 import warnings
 
-                warnings.warn("`tracking` logger is deprecated. use `wandb` instead.", DeprecationWarning, stacklevel=2)
+                warnings.warn(
+                    "`tracking` logger is deprecated. use `wandb` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
             else:
                 assert backend in self.supported_backend, f"{backend} is not supported"
 
         self.logger = {}
 
         if "tracking" in default_backend or "wandb" in default_backend:
+            import os
+
             import wandb
 
             settings = None
             if config and config["trainer"].get("wandb_proxy", None):
                 settings = wandb.Settings(https_proxy=config["trainer"]["wandb_proxy"])
-            wandb.init(project=project_name, name=experiment_name, config=config, settings=settings)
+            if not os.environ.get("WANDB_API_KEY", None):
+                wandb.login(key=os.environ.get("WANDB_API_KEY", None))
+            wandb.init(
+                project=project_name,
+                name=experiment_name,
+                config=config,
+                settings=settings,
+            )
             self.logger["wandb"] = wandb
 
         if "trackio" in default_backend:
@@ -212,10 +231,7 @@ class ClearMLLogger:
                     iteration=step,
                 )
             else:
-                logger.warning(
-                    f'Trainer is attempting to log a value of "{v}" of type {type(v)} for key "{k}". This '
-                    f"invocation of ClearML logger's function is incorrect so this attribute was dropped. "
-                )
+                logger.warning(f'Trainer is attempting to log a value of "{v}" of type {type(v)} for key "{k}". This invocation of ClearML logger\'s function is incorrect so this attribute was dropped. ')
 
     def finish(self):
         self._task.close()
@@ -274,11 +290,17 @@ def _compute_mlflow_params_from_objects(params) -> dict[str, Any]:
     if params is None:
         return {}
 
-    return _flatten_dict(_transform_params_to_json_serializable(params, convert_list_to_dict=True), sep="/")
+    return _flatten_dict(
+        _transform_params_to_json_serializable(params, convert_list_to_dict=True),
+        sep="/",
+    )
 
 
 def _transform_params_to_json_serializable(x, convert_list_to_dict: bool):
-    _transform = partial(_transform_params_to_json_serializable, convert_list_to_dict=convert_list_to_dict)
+    _transform = partial(
+        _transform_params_to_json_serializable,
+        convert_list_to_dict=convert_list_to_dict,
+    )
 
     if dataclasses.is_dataclass(x):
         return _transform(dataclasses.asdict(x))
@@ -341,7 +363,8 @@ class ValidationGenerationsLogger:
 
         # Create column names for all samples
         columns = ["step"] + sum(
-            [[f"input_{i + 1}", f"output_{i + 1}", f"score_{i + 1}"] for i in range(len(samples))], []
+            [[f"input_{i + 1}", f"output_{i + 1}", f"score_{i + 1}"] for i in range(len(samples))],
+            [],
         )
 
         if not hasattr(self, "validation_table"):

@@ -320,6 +320,7 @@ class vLLMRollout(BaseRollout):
                 "min_p": 0.0,
                 "temperature": 0,
                 "n": 1,  # if greedy, only 1 response
+                "repetition_penalty": 1.0,
             }
         elif is_validate:
             # TODO: try **
@@ -328,6 +329,7 @@ class vLLMRollout(BaseRollout):
                 "top_p": self.config.val_kwargs.top_p,
                 "temperature": self.config.val_kwargs.temperature,
                 "n": 1,  # if validate, already repeat in ray_trainer
+                "repetition_penalty": 1.0,
             }
 
         lora_requests = None

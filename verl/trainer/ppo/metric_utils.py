@@ -214,6 +214,26 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> dict[str,
         metrics["num_turns/min"] = num_turns.min()
         metrics["num_turns/max"] = num_turns.max()
         metrics["num_turns/mean"] = num_turns.mean()
+    if hasattr(batch, "non_tensor_batch") and batch.non_tensor_batch:
+        # Check for accuracy_reward component
+        if "acc_score" in batch.non_tensor_batch:
+            accuracy_rewards = torch.tensor(batch.non_tensor_batch["acc_score"], dtype=torch.float32)
+            metrics.update(
+                {
+                    "critic/score/acc_score/mean": torch.mean(accuracy_rewards).detach().item(),
+                    "critic/score/acc_score/max": torch.max(accuracy_rewards).detach().item(),
+                    "critic/score/acc_score/min": torch.min(accuracy_rewards).detach().item(),
+                }
+            )
+        if "format_reward_score" in batch.non_tensor_batch:
+            format_reward_score = torch.tensor(batch.non_tensor_batch["format_reward_score"], dtype=torch.float32)
+            metrics.update(
+                {
+                    "critic/score/format_reward_score/mean": torch.mean(format_reward_score).detach().item(),
+                    "critic/score/format_reward_score/max": torch.max(format_reward_score).detach().item(),
+                    "critic/score/format_reward_score/min": torch.min(format_reward_score).detach().item(),
+                }
+            )
 
     if "tool_call_counts" in batch.non_tensor_batch:
         tool_call_counts = batch.non_tensor_batch["tool_call_counts"]

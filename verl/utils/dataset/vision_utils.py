@@ -22,6 +22,14 @@ from qwen_vl_utils import fetch_image, fetch_video
 
 def process_image(image: dict | Image.Image) -> Image.Image:
     if isinstance(image, Image.Image):
+        if image.width < 28 or image.height < 28:
+            # Resize with 28 on the short side, maintaining aspect ratio
+            short_side = min(image.width, image.height)
+            if short_side < 28:
+                scale_factor = 28 / short_side
+                new_width = int(image.width * scale_factor)
+                new_height = int(image.height * scale_factor)
+                image = image.resize((new_width, new_height))
         return image.convert("RGB")
 
     if "bytes" in image:

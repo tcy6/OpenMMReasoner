@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import copy
+import json
 import logging
 import os
 import re
@@ -25,6 +26,7 @@ import datasets
 import numpy as np
 import torch
 from omegaconf import DictConfig, ListConfig
+from PIL import Image
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
 
@@ -32,6 +34,11 @@ import verl.utils.torch_functional as verl_F
 from verl.utils.model import compute_position_id_with_mask
 
 logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = (
+    r"You are a helpful assistant. You FIRST think about the reasoning process as an internal monologue and then provide the final answer."
+    r"The reasoning process MUST BE enclosed within <think> </think> tags."
+)
 
 
 def collate_fn(data_list: list[dict]) -> dict:
@@ -131,8 +138,14 @@ class RLHFDataset(Dataset):
     def _read_files_and_tokenize(self):
         dataframes = []
         for parquet_file in self.data_files:
-            # read parquet files and cache
-            dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
+            if "@" in parquet_file:
+                data_path, data_subset, data_split = parquet_file.split("@")
+                dataframe = datasets.load_dataset(data_path, split=data_split, name=data_subset)
+                if "data_source" not in dataframe.column_names:
+                    dataframe = dataframe.map(lambda x: {"data_source": data_subset})  # here we use data_subset (e.g. AI2D_train) as data_source
+            else:
+                # read parquet files and cache
+                dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
             dataframes.append(dataframe)
         self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
 
@@ -141,6 +154,16 @@ class RLHFDataset(Dataset):
         self.dataframe = self.maybe_filter_out_long_prompts(self.dataframe)
 
     def maybe_filter_out_long_prompts(self, dataframe: datasets.Dataset = None):
+        mm_columns = []
+        if self.video_key in dataframe.column_names:
+            mm_columns.append(self.video_key)
+        if self.image_key in dataframe.column_names:
+            mm_columns.append(self.image_key)
+        dataframe_mm_drop = dataframe.remove_columns(mm_columns)
+        if "ids" in dataframe_mm_drop.column_names:
+            dataframe_mm_drop = dataframe_mm_drop.remove_columns(["ids"])
+        ids = datasets.Dataset.from_dict({"ids": [i for i in range(len(dataframe))]})
+        dataframe_mm_drop = datasets.concatenate_datasets([dataframe_mm_drop, ids], axis=1)
         # filter out too long prompts
         if self.filter_overlong_prompts:
             tokenizer = self.tokenizer
@@ -153,6 +176,9 @@ class RLHFDataset(Dataset):
                 from verl.utils.dataset.vision_utils import process_image, process_video
 
                 def doc2len(doc) -> int:
+                    # doc_copy = copy.deepcopy(doc)  # Create a copy to avoid modifying the original
+                    if "tokens" in doc and doc["tokens"] is not None:
+                        return doc["tokens"]
                     messages = self._build_messages(doc)
                     raw_prompt = self.processor.apply_chat_template(
                         messages, add_generation_prompt=True, tokenize=False, **self.apply_chat_template_kwargs
@@ -179,11 +205,13 @@ class RLHFDataset(Dataset):
                         )
                     )
 
-            dataframe = dataframe.filter(
+            dataframe_mm_drop = dataframe_mm_drop.filter(
                 lambda doc: doc2len(doc) <= self.max_prompt_length,
                 num_proc=self.num_workers,
                 desc=f"Filtering prompts longer than {self.max_prompt_length} tokens",
             )
+            select_ids = dataframe_mm_drop["ids"]
+            dataframe = dataframe.select(select_ids)
 
             print(f"filter dataset len: {len(dataframe)}")
         return dataframe
@@ -201,7 +229,46 @@ class RLHFDataset(Dataset):
         return len(self.dataframe)
 
     def _build_messages(self, example: dict):
-        messages: list = example.pop(self.prompt_key)
+        # Check if this is multimodal format (has 'problem' instead of 'prompt')
+        if "problem" in example and self.prompt_key not in example:
+            # Convert multimodal format to chat format
+            problem_text = example.pop("problem")
+
+            # Check if there are images
+            if self.image_key in example and example[self.image_key]:
+                # Count images and add placeholder for each
+                num_images = len(example[self.image_key])
+                if "<image>" not in problem_text:
+                    content = "<image>" * num_images + problem_text
+                else:
+                    content = problem_text
+            else:
+                content = problem_text
+
+            # Create chat message format
+            messages = [{"role": "user", "content": content}]
+
+            # Store answer in extra_info if it exists
+            if "answer" in example:
+                if "extra_info" not in example:
+                    example["extra_info"] = {}
+                example["extra_info"]["answer"] = example.pop("answer")
+
+            # Store ids in extra_info if it exists
+            if "ids" in example:
+                if "extra_info" not in example:
+                    example["extra_info"] = {}
+                example["extra_info"]["index"] = example.pop("ids")
+        else:
+            # Original text format
+            messages: list = example.pop(self.prompt_key)
+            
+            # Add system prompt if not present
+            if messages and messages[0].get('role') != 'system':
+                messages.insert(0, {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                })
 
         if self.image_key in example or self.video_key in example:
             for message in messages:
@@ -264,7 +331,8 @@ class RLHFDataset(Dataset):
                 model_inputs.pop("second_per_grid_ts")
 
             # There's a trap here, multi_modal_inputs has to be a dict, not BatchFeature
-            row_dict["multi_modal_data"] = multi_modal_data
+            if len(multi_modal_data) > 0:
+                row_dict["multi_modal_data"] = multi_modal_data
 
             # We will do batch.union() in the trainer,
             # so we cannot have "multi_modal_inputs" in row_dict if rollout generates new multi_modal_inputs
@@ -366,10 +434,23 @@ class RLHFDataset(Dataset):
         interaction_kwargs = row_dict.get("extra_info", {}).get("interaction_kwargs", {})
         need_tools_kwargs = row_dict.get("extra_info", {}).get("need_tools_kwargs", self.need_tools_kwargs)
         if need_tools_kwargs and not tools_kwargs:
-            logger.warning("tools_kwargs is empty for index {}, data source: {}", index, row_dict["data_source"])
+            logger.warning("tools_kwargs is empty for index {}, data source: {}", index, row_dict.get("data_source", "unknown"))
         row_dict["index"] = index
         row_dict["tools_kwargs"] = tools_kwargs
         row_dict["interaction_kwargs"] = interaction_kwargs
+
+        # Add reward_model field for multimodal data if it doesn't exist
+        if "reward_model" not in row_dict:
+            # Check for answer in extra_info first, then in the main row_dict
+            answer = None
+            if "extra_info" in row_dict and "answer" in row_dict["extra_info"]:
+                answer = row_dict["extra_info"]["answer"]
+            elif "answer" in row_dict:
+                answer = row_dict["answer"]
+
+            if answer is not None:
+                row_dict["reward_model"] = {"ground_truth": answer, "style": "rule"}
+
         return row_dict
 
     def __getstate__(self):

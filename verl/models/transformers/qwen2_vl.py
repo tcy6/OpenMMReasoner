@@ -61,6 +61,73 @@ if is_npu_available:
 _flash_deterministic_enabled = os.getenv("FLASH_ATTENTION_DETERMINISTIC", "0") == "1"
 
 
+# Changes here to ignore small mismatch between image tokens and image features
+# If smaller than 5, we believe this is due to the image preprocessing and it is not a big issue
+def get_placeholder_mask(
+    model: "Qwen2VLForConditionalGeneration",
+    input_ids: torch.LongTensor,
+    inputs_embeds: torch.FloatTensor,
+    image_features: Optional[torch.FloatTensor] = None,
+    video_features: Optional[torch.FloatTensor] = None,
+):
+    """
+    Obtains multimodal placeholder mask from `input_ids` or `inputs_embeds`, and checks that the placeholder token count is
+    equal to the length of multimodal features. If the lengths are different, an error is raised.
+    """
+    if input_ids is None:
+        special_image_mask = inputs_embeds == model.get_input_embeddings()(
+            torch.tensor(model.config.image_token_id, dtype=torch.long, device=inputs_embeds.device)
+        )
+        special_image_mask = special_image_mask.all(-1)
+        special_video_mask = inputs_embeds == model.get_input_embeddings()(
+            torch.tensor(model.config.video_token_id, dtype=torch.long, device=inputs_embeds.device)
+        )
+        special_video_mask = special_video_mask.all(-1)
+    else:
+        special_image_mask = input_ids == model.config.image_token_id
+        special_video_mask = input_ids == model.config.video_token_id
+
+    n_image_tokens = special_image_mask.sum()
+    if image_features is not None:
+        mismatch = abs(n_image_tokens - image_features.shape[0])
+        if mismatch > 0 and mismatch < 5:
+            bs, seq_len = special_image_mask.shape
+            # Step 1: Flatten
+            special_image_mask_flat = special_image_mask.flatten()
+
+            # Step 2: Find indices of True elements
+            true_indices = special_image_mask_flat.nonzero(as_tuple=False).squeeze()
+            # Step 3: Select the last k indices and set them to False
+            special_image_mask_flat[true_indices[:mismatch]] = False
+            special_image_mask = special_image_mask_flat.view(bs, seq_len)
+    special_image_mask = special_image_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
+    if image_features is not None and inputs_embeds[special_image_mask].numel() != image_features.numel():
+        raise ValueError(
+            f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {image_features.shape[0]}"
+        )
+
+    n_video_tokens = special_video_mask.sum()
+    if video_features is not None:
+        mismatch = abs(n_video_tokens - video_features.shape[0])
+        if mismatch > 0 and mismatch < 5:
+            bs, seq_len = special_video_mask.shape
+            # Step 1: Flatten
+            special_video_mask_flat = special_video_mask.flatten()
+
+            # Step 2: Find indices of True elements
+            true_indices = special_video_mask_flat.nonzero(as_tuple=False).squeeze()
+            # Step 3: Select the last k indices and set them to False
+            special_video_mask_flat[true_indices[:mismatch]] = False
+            special_video_mask = special_video_mask_flat.view(bs, seq_len)
+    special_video_mask = special_video_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
+    if video_features is not None and inputs_embeds[special_video_mask].numel() != video_features.numel():
+        raise ValueError(
+            f"Videos features and video tokens do not match: tokens: {n_video_tokens}, features {video_features.shape[0]}"
+        )
+
+    return special_image_mask, special_video_mask
+
+
 def get_rope_index(
     processor,
     input_ids: torch.Tensor,
@@ -345,17 +412,7 @@ def _get_input_embeds(
     if pixel_values is not None:
         pixel_values = pixel_values.type(model.visual.dtype)
         image_embeds = model.visual(pixel_values, grid_thw=image_grid_thw)
-        n_image_tokens = (input_ids == model.config.image_token_id).sum().item()
-        n_image_features = image_embeds.shape[0]
-        if n_image_tokens != n_image_features:
-            raise ValueError(
-                f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
-            )
-
-        mask = input_ids == model.config.image_token_id
-        mask_unsqueezed = mask.unsqueeze(-1)
-        mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-        image_mask = mask_expanded.to(inputs_embeds.device)
+        image_mask, _ = get_placeholder_mask(model, input_ids, inputs_embeds, image_features=image_embeds)
 
         image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(image_mask, image_embeds)
@@ -363,17 +420,7 @@ def _get_input_embeds(
     if pixel_values_videos is not None:
         pixel_values_videos = pixel_values_videos.type(model.visual.dtype)
         video_embeds = model.visual(pixel_values_videos, grid_thw=video_grid_thw)
-        n_video_tokens = (input_ids == model.config.video_token_id).sum().item()
-        n_video_features = video_embeds.shape[0]
-        if n_video_tokens != n_video_features:
-            raise ValueError(
-                f"Video features and video tokens do not match: tokens: {n_video_tokens}, features {n_video_features}"
-            )
-
-        mask = input_ids == model.config.video_token_id
-        mask_unsqueezed = mask.unsqueeze(-1)
-        mask_expanded = mask_unsqueezed.expand_as(inputs_embeds)
-        video_mask = mask_expanded.to(inputs_embeds.device)
+        _, video_mask = get_placeholder_mask(model, input_ids, inputs_embeds, video_features=video_embeds)
 
         video_embeds = video_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
         inputs_embeds = inputs_embeds.masked_scatter(video_mask, video_embeds)
