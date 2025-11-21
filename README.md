@@ -5,7 +5,7 @@
 
 [![Models](https://img.shields.io/badge/Models-5EDDD2?style=for-the-badge&logo=huggingface&logoColor=ffffff&labelColor)](https://huggingface.co/OpenMMReasoner/OpenMMReasoner-RL)
 [![Data](https://img.shields.io/badge/Data-0040A1?style=for-the-badge&logo=huggingface&logoColor=ffffff&labelColor)](https://huggingface.co/collections/lmms-lab/openmmreasoner)
-[![Paper](https://img.shields.io/badge/Paper-000000?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org)
+[![Paper](https://img.shields.io/badge/Paper-000000?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2511.16334)
 [![Project Page](https://img.shields.io/badge/Website-000000?style=for-the-badge&logo=google-chrome&logoColor=white)](https://evolvinglmms-lab.github.io/OpenMMReasoner/)
 [![Github](https://img.shields.io/badge/Code-000000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/EvolvingLMMs-Lab/OpenMMReasoner)
 </div>
@@ -256,7 +256,15 @@ Our **OpenMMReasoner-7B (OMR-7B)** model demonstrates strong performance across 
 If you find OpenMMReasoner useful for your research and applications, please cite using this BibTeX:
 
 ```bibtex
-
+@misc{zhang2025openmmreasonerpushingfrontiersmultimodal,
+      title={OpenMMReasoner: Pushing the Frontiers for Multimodal Reasoning with an Open and General Recipe}, 
+      author={Kaichen Zhang and Keming Wu and Zuhao Yang and Kairui Hu and Bin Wang and Ziwei Liu and Xingxuan Li and Lidong Bing},
+      year={2025},
+      eprint={2511.16334},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2511.16334}, 
+}
 ```
 
 ## Acknowledgements
