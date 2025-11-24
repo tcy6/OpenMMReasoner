@@ -8,6 +8,7 @@
 [![Paper](https://img.shields.io/badge/Paper-000000?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2511.16334)
 [![Project Page](https://img.shields.io/badge/Website-000000?style=for-the-badge&logo=google-chrome&logoColor=white)](https://evolvinglmms-lab.github.io/OpenMMReasoner/)
 [![Github](https://img.shields.io/badge/Code-000000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/EvolvingLMMs-Lab/OpenMMReasoner)
+[![Static Badge](https://img.shields.io/badge/Blog-lmms_lab?style=for-the-badge)](https://www.lmms-lab.com/posts/openmmreasoner/)
 </div>
 
 ## Table of Contents
