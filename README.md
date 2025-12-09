@@ -271,7 +271,7 @@ If you find OpenMMReasoner useful for your research and applications, please cit
 ```bibtex
 @misc{zhang2025openmmreasonerpushingfrontiersmultimodal,
       title={OpenMMReasoner: Pushing the Frontiers for Multimodal Reasoning with an Open and General Recipe}, 
-      author={Kaichen Zhang and Keming Wu and Zuhao Yang and Kairui Hu and Bin Wang and Ziwei Liu and Xingxuan Li and Lidong Bing},
+      author={Kaichen Zhang and Keming Wu and Zuhao Yang and Bo Li and Kairui Hu and Bin Wang and Ziwei Liu and Xingxuan Li and Lidong Bing},
       year={2025},
       eprint={2511.16334},
       archivePrefix={arXiv},
