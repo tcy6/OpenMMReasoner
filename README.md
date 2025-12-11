@@ -17,6 +17,7 @@
 </div>
 
 ## 🎉 News
+- **[2025-12]**: We are invited to BAAI Live Talk! Check out the [Slides & Recording](https://event.baai.ac.cn/activities/983).
 - **[2025-11]**: We have created two fun slides ([Doraemon](https://github.com/EvolvingLMMs-Lab/OpenMMReasoner/blob/main/vibe_slides/OpenMMReasoner_x_Doraemon.pdf) & [Pokemon](https://github.com/EvolvingLMMs-Lab/OpenMMReasoner/blob/main/vibe_slides/OpenMMReasoner_x_Pokemon.pdf)) to explain OpenMMReasoner. Enjoy :) Credit to the amazing [NotebookLM](https://notebooklm.google.com/) and [Gemini-3](https://blog.google/products/gemini/gemini-3/#learn-anything).
 - **[2025-11]**: 🏆: **Top \#1 Paper** of the day at HuggingFace Daily Papers (Nov.24, 2025), Welcome to checkout our [OpenMMReasoner HF Daily Paper](https://huggingface.co/papers/2511.16334)!
 - **[2025-11]**: Join our WeChat group by scanning this [QR code](assets/wechat_qr.jpg).
@@ -271,7 +272,7 @@ If you find OpenMMReasoner useful for your research and applications, please cit
 ```bibtex
 @misc{zhang2025openmmreasonerpushingfrontiersmultimodal,
       title={OpenMMReasoner: Pushing the Frontiers for Multimodal Reasoning with an Open and General Recipe}, 
-      author={Kaichen Zhang and Keming Wu and Zuhao Yang and Kairui Hu and Bin Wang and Ziwei Liu and Xingxuan Li and Lidong Bing},
+      author={Kaichen Zhang and Keming Wu and Zuhao Yang and Bo Li and Kairui Hu and Bin Wang and Ziwei Liu and Xingxuan Li and Lidong Bing},
       year={2025},
       eprint={2511.16334},
       archivePrefix={arXiv},
